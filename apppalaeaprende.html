@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fala e Aprende - Alfabetização Divertida</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Quicksand', sans-serif;
+            background-color: #f0f9ff; /* Azul bem suave */
+            touch-action: manipulation;
+        }
+
+        /* Animação de sucesso */
+        @keyframes pop {
+            0% { transform: scale(0.8); opacity: 0; }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .card-pop {
+            animation: pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        /* Animação de erro (tremor) */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+        .card-shake {
+            animation: shake 0.3s ease-in-out;
+        }
+
+        /* Confetti simples CSS */
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #f00;
+            animation: fall linear forwards;
+        }
+        @keyframes fall {
+            to { transform: translateY(100vh) rotate(720deg); }
+        }
+
+        /* Animação do Troféu */
+        @keyframes trophy-pop {
+            0% { transform: scale(0) rotate(-180deg); opacity: 0; }
+            80% { transform: scale(1.2) rotate(10deg); opacity: 1; }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        .trophy-anim {
+            animation: trophy-pop 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col items-center justify-between overflow-hidden select-none relative">
+
+    <!-- Overlay de Recompensa (Escondido por padrão) -->
+    <div id="reward-overlay" class="fixed inset-0 bg-black/50 z-50 hidden flex flex-col items-center justify-center backdrop-blur-sm transition-opacity">
+        <div class="bg-white p-8 rounded-3xl shadow-2xl text-center transform scale-0 trophy-anim">
+            <div class="text-8xl mb-4">🏆</div>
+            <h2 class="text-3xl font-bold text-yellow-500 mb-2">Parabéns!</h2>
+            <p class="text-gray-600 text-xl font-semibold">Você completou mais 5!</p>
+            <button onclick="closeReward()" class="mt-6 px-6 py-3 bg-blue-500 text-white rounded-full font-bold text-lg hover:bg-blue-600 transition shadow-lg">Continuar</button>
+        </div>
+    </div>
+
+    <!-- Header / Menu -->
+    <header class="w-full p-4 flex flex-col gap-3 bg-white shadow-sm z-10">
+        <div class="flex justify-between items-center w-full">
+            <h1 class="text-xl sm:text-2xl font-bold text-blue-500 flex items-center gap-2">
+                🦜 Fala e Aprende
+            </h1>
+            
+            <!-- Recorde Display -->
+            <div class="bg-yellow-100 px-3 py-1 rounded-full border border-yellow-300 flex items-center gap-1 shadow-sm">
+                <span class="text-yellow-600 text-sm font-bold">🏆 Recorde:</span>
+                <span id="record-display" class="text-yellow-700 font-bold text-lg">0</span>
+            </div>
+
+            <!-- Botões de Configuração -->
+            <div class="flex gap-2">
+                 <!-- Botão Carregar JSON -->
+                 <button onclick="document.getElementById('file-input').click()" class="px-3 py-2 rounded-full font-bold bg-green-100 text-green-700 transition transform hover:scale-105 border-2 border-green-200 text-sm flex items-center gap-1" title="Carregar arquivo JSON de palavras">
+                    📁 <span class="hidden sm:inline">Carregar</span>
+                </button>
+                <input type="file" id="file-input" accept=".json" class="hidden" onchange="loadUserJson(this)">
+
+                 <!-- Botão Aleatório -->
+                <button onclick="toggleRandom()" id="btn-random" class="px-3 py-2 rounded-full font-bold bg-gray-200 text-gray-600 transition transform hover:scale-105 border-2 border-transparent text-sm" title="Modo Aleatório">
+                    🔀 <span class="hidden sm:inline">Aleatório</span>
+                </button>
+                <!-- Botão Acentos -->
+                <button onclick="toggleAccents()" id="btn-accents" class="px-3 py-2 rounded-full font-bold bg-gray-200 text-gray-600 transition transform hover:scale-105 border-2 border-transparent text-sm" title="Ativar Acentos (ÃO, Ê, Ó...)">
+                    ^~ <span class="hidden sm:inline">Acentos</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex gap-2 flex-wrap justify-center w-full">
+            <button onclick="setMode('letras')" id="btn-letras" class="mode-btn px-4 py-2 rounded-full font-bold bg-blue-500 text-white transition transform hover:scale-105 text-sm flex-grow sm:flex-grow-0">Letras</button>
+            <button onclick="setMode('silabas')" id="btn-silabas" class="mode-btn px-4 py-2 rounded-full font-bold bg-gray-200 text-gray-600 transition transform hover:scale-105 text-sm flex-grow sm:flex-grow-0">Sílabas</button>
+            <button onclick="setMode('palavras')" id="btn-palavras" class="mode-btn px-4 py-2 rounded-full font-bold bg-gray-200 text-gray-600 transition transform hover:scale-105 text-sm flex-grow sm:flex-grow-0">Palavras</button>
+        </div>
+    </header>
+
+    <!-- Área Principal de Conteúdo -->
+    <main class="flex-grow flex flex-col items-center justify-center w-full max-w-4xl relative px-4">
+        
+        <!-- Pontuação (Agora mostra número também) -->
+        <div class="absolute top-0 right-4 flex flex-col items-end pointer-events-none">
+            <div class="flex gap-1 mb-1" id="stars-container">
+                <!-- Estrelas inseridas via JS -->
+            </div>
+            <div class="text-blue-400 font-bold text-sm bg-white/80 px-2 rounded-full backdrop-blur-sm shadow-sm border border-blue-100">
+                <span id="score-number">0</span> Estrelas
+            </div>
+        </div>
+
+        <!-- Cartão de Pergunta (Adaptável) -->
+        <div id="game-card" class="bg-white rounded-3xl shadow-lg p-8 w-auto min-w-[300px] min-h-[300px] sm:min-w-[400px] sm:min-h-[400px] max-w-full flex flex-col items-center justify-center text-center border-4 border-blue-200 relative card-pop transition-all duration-200">
+            
+            <!-- Área do Emoji / Dica -->
+            <div class="h-24 flex items-center justify-center mb-2 w-full relative">
+                <!-- Emoji (Absolute para não pular layout) -->
+                <div id="display-emoji" class="text-6xl hidden transition-all duration-500 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">🍎</div>
+                
+                <!-- Botão Dica -->
+                <button id="btn-reveal-emoji" onclick="showEmoji()" class="hidden px-5 py-3 bg-yellow-100 text-yellow-700 rounded-full text-lg font-bold hover:bg-yellow-200 transition border-2 border-yellow-300 shadow-md z-10 active:scale-95 flex items-center gap-2">
+                    <span>🙈</span> Ver Dica
+                </button>
+            </div>
+            
+            <!-- Texto Principal -->
+            <div id="display-text" class="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold text-slate-700 tracking-wider mt-4 break-words">A</div>
+            
+        </div>
+
+        <!-- Feedback Visual -->
+        <div id="feedback-msg" class="h-10 mt-4 text-xl font-bold text-center text-blue-500 transition-all opacity-0 transform translate-y-4">
+            Muito bem!
+        </div>
+
+    </main>
+
+    <!-- Controles -->
+    <footer class="w-full bg-white p-4 sm:p-6 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] rounded-t-3xl z-20">
+        <div class="flex flex-col items-center gap-2">
+            
+            <div class="flex w-full justify-center gap-4 sm:gap-8 items-center max-w-lg px-4">
+                
+                <!-- Botão Ouvir -->
+                <button onclick="speakCurrentItem()" class="flex flex-col items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-yellow-100 text-yellow-600 hover:bg-yellow-200 shadow-md transition transform active:scale-95" title="Ouvir pronúncia">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 sm:h-10 sm:w-10 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                    </svg>
+                    <span class="text-[10px] sm:text-xs font-bold">Ouvir</span>
+                </button>
+
+                 <!-- Botão Errou (Novo) -->
+                 <button onclick="handleManualError()" class="flex flex-col items-center justify-center w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-red-100 text-red-500 hover:bg-red-200 shadow-lg transition transform active:scale-95 border-2 border-red-200" title="Errou (Perde estrelas)">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 sm:h-12 sm:w-12 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    <span class="text-xs sm:text-sm font-bold">Tentar</span>
+                </button>
+
+                <!-- Botão Acertou -->
+                <button onclick="handleSuccess()" class="flex flex-col items-center justify-center w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-green-500 text-white hover:bg-green-600 shadow-lg transition transform active:scale-95 ring-4 ring-green-100" title="Acertou! (Próximo)">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 sm:h-12 sm:w-12 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span class="text-xs sm:text-sm font-bold">Acertou!</span>
+                </button>
+
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts de Lógica -->
+    <script>
+        // --- Dados do App ---
+        const data = {
+            letras: [
+                { text: "A", display: "A", emoji: "✈️" }, { text: "B", display: "B", emoji: "⚽" }, 
+                { text: "C", display: "C", emoji: "🏠" }, { text: "D", display: "D", emoji: "🎲" }, 
+                { text: "E", display: "E", emoji: "🐘" }, { text: "F", display: "F", emoji: "🦭" },
+                { text: "G", display: "G", emoji: "🐱" }, { text: "H", display: "H", emoji: "🚁" }, 
+                { text: "I", display: "I", emoji: "🏝️" }, { text: "J", display: "J", emoji: "🐊" }, 
+                { text: "K", display: "K", emoji: "🥝" }, { text: "L", display: "L", emoji: "🦁" },
+                { text: "M", display: "M", emoji: "🍎" }, { text: "N", display: "N", emoji: "🚢" }, 
+                { text: "O", display: "O", emoji: "🥚" }, { text: "P", display: "P", emoji: "🦆" }, 
+                { text: "Q", display: "Q", emoji: "🧀" }, { text: "R", display: "R", emoji: "🐭" },
+                { text: "S", display: "S", emoji: "☀️" }, { text: "T", display: "T", emoji: "🐢" }, 
+                { text: "U", display: "U", emoji: "🍇" }, { text: "V", display: "V", emoji: "🐄" }, 
+                { text: "W", display: "W", emoji: "🧇" }, { text: "X", display: "X", emoji: "☕" },
+                { text: "Y", display: "Y", emoji: "🍜" }, { text: "Z", display: "Z", emoji: "🦓" }
+            ],
+            silabas: [
+                // Simples
+                { text: "BA", display: "BA" }, { text: "BE", display: "BE" }, { text: "BI", display: "BI" }, { text: "BO", display: "BO" }, { text: "BU", display: "BU" },
+                { text: "CA", display: "CA" }, { text: "CE", display: "CE" }, { text: "CI", display: "CI" }, { text: "CO", display: "CO" }, { text: "CU", display: "CU" },
+                { text: "DA", display: "DA" }, { text: "DE", display: "DE" }, { text: "DI", display: "DI" }, { text: "DO", display: "DO" }, { text: "DU", display: "DU" },
+                { text: "FA", display: "FA" }, { text: "FE", display: "FE" }, { text: "FI", display: "FI" }, { text: "FO", display: "FO" }, { text: "FU", display: "FU" },
+                { text: "GA", display: "GA" }, { text: "GE", display: "GE" }, { text: "GI", display: "GI" }, { text: "GO", display: "GO" }, { text: "GU", display: "GU" },
+                { text: "JA", display: "JA" }, { text: "JE", display: "JE" }, { text: "JI", display: "JI" }, { text: "JO", display: "JO" }, { text: "JU", display: "JU" },
+                { text: "LA", display: "LA" }, { text: "LE", display: "LE" }, { text: "LI", display: "LI" }, { text: "LO", display: "LO" }, { text: "LU", display: "LU" },
+                { text: "MA", display: "MA" }, { text: "ME", display: "ME" }, { text: "MI", display: "MI" }, { text: "MO", display: "MO" }, { text: "MU", display: "MU" },
+                { text: "NA", display: "NA" }, { text: "NE", display: "NE" }, { text: "NI", display: "NI" }, { text: "NO", display: "NO" }, { text: "NU", display: "NU" },
+                { text: "PA", display: "PA" }, { text: "PE", display: "PE" }, { text: "PI", display: "PI" }, { text: "PO", display: "PO" }, { text: "PU", display: "PU" },
+                { text: "QUA", display: "QUA" }, { text: "QUE", display: "QUE" }, { text: "QUI", display: "QUI" }, { text: "QUO", display: "QUO" },
+                { text: "RA", display: "RA" }, { text: "RE", display: "RE" }, { text: "RI", display: "RI" }, { text: "RO", display: "RO" }, { text: "RU", display: "RU" },
+                { text: "SA", display: "SA" }, { text: "SE", display: "SE" }, { text: "SI", display: "SI" }, { text: "SO", display: "SO" }, { text: "SU", display: "SU" },
+                { text: "TA", display: "TA" }, { text: "TE", display: "TE" }, { text: "TI", display: "TI" }, { text: "TO", display: "TO" }, { text: "TU", display: "TU" },
+                { text: "VA", display: "VA" }, { text: "VE", display: "VE" }, { text: "VI", display: "VI" }, { text: "VO", display: "VO" }, { text: "VU", display: "VU" },
+                { text: "XA", display: "XA" }, { text: "XE", display: "XE" }, { text: "XI", display: "XI" }, { text: "XO", display: "XO" }, { text: "XU", display: "XU" },
+                { text: "ZA", display: "ZA" }, { text: "ZE", display: "ZE" }, { text: "ZI", display: "ZI" }, { text: "ZO", display: "ZO" }, { text: "ZU", display: "ZU" },
+                
+                // Com Acentos (Opcionais)
+                { text: "BÃO", display: "BÃO", isAccent: true }, { text: "CÃO", display: "CÃO", isAccent: true }, 
+                { text: "DÃO", display: "DÃO", isAccent: true }, { text: "FÃO", display: "FÃO", isAccent: true },
+                { text: "GÃO", display: "GÃO", isAccent: true }, { text: "LÃO", display: "LÃO", isAccent: true }, { text: "LÃ", display: "LÃ", isAccent: true },
+                { text: "MÃO", display: "MÃO", isAccent: true }, { text: "MÃE", display: "MÃE", isAccent: true },
+                { text: "NÃO", display: "NÃO", isAccent: true }, 
+                { text: "PÃO", display: "PÃO", isAccent: true }, { text: "PÕE", display: "PÕE", isAccent: true },
+                { text: "RÃO", display: "RÃO", isAccent: true },
+                { text: "SÃO", display: "SÃO", isAccent: true }, 
+                { text: "TÃO", display: "TÃO", isAccent: true },
+                { text: "VÃO", display: "VÃO", isAccent: true }, { text: "VÓ", display: "VÓ", isAccent: true }, { text: "VÔ", display: "VÔ", isAccent: true },
+                { text: "ZÃO", display: "ZÃO", isAccent: true },
+                { text: "CHÃO", display: "CHÃO", isAccent: true }, { text: "NHÃO", display: "NHÃO", isAccent: true }, { text: "LHÃO", display: "LHÃO", isAccent: true }
+            ],
+            palavras: [
+                // --- ANIMAIS ---
+                { text: "GATO", emoji: "🐱" }, { text: "CACHORRO", emoji: "🐶" }, { text: "PÁSSARO", emoji: "🐦" }, { text: "PEIXE", emoji: "🐠" },
+                { text: "ELEFANTE", emoji: "🐘" }, { text: "LEÃO", emoji: "🦁" }, { text: "TIGRE", emoji: "🐯" }, { text: "URSO", emoji: "🐻" },
+                { text: "COELHO", emoji: "🐰" }, { text: "RATO", emoji: "🐭" }, { text: "COBRA", emoji: "🐍" }, { text: "TARTARUGA", emoji: "🐢" },
+                { text: "SAPO", emoji: "🐸" }, { text: "MACACO", emoji: "🐵" }, { text: "GIRAFA", emoji: "🦒" }, { text: "ZEBRA", emoji: "🦓" },
+                { text: "RINOCERONTE", emoji: "🦏" }, { text: "HIPOPÓTAMO", emoji: "🦛" }, { text: "CROCODILO", emoji: "🐊" }, { text: "VACA", emoji: "🐄" },
+                { text: "PORCO", emoji: "🐷" }, { text: "OVELHA", emoji: "🐑" }, { text: "CAVALO", emoji: "🐎" }, { text: "GALINHA", emoji: "🐔" },
+                { text: "PATO", emoji: "🦆" }, { text: "ABELHA", emoji: "🐝" }, { text: "BORBOLETA", emoji: "🦋" }, { text: "ARANHA", emoji: "🕷️" },
+                { text: "FORMIGA", emoji: "🐜" }, { text: "BALEIA", emoji: "🐋" }, { text: "GOLFINHO", emoji: "🐬" }, { text: "TUBARÃO", emoji: "🦈" },
+                { text: "POLVO", emoji: "🐙" }, { text: "CARANGUEJO", emoji: "🦀" }, { text: "PINGUIM", emoji: "🐧" }, { text: "FOCA", emoji: "🦭" },
+                { text: "PANDA", emoji: "🐼" }, { text: "CANGURU", emoji: "🦘" }, { text: "CAMELO", emoji: "🐪" }, { text: "RAPOSA", emoji: "🦊" },
+                { text: "LOBO", emoji: "🐺" }, { text: "ESQUILO", emoji: "🐿️" }, { text: "ONÇA", emoji: "🐆" }, { text: "GORILA", emoji: "🦍" },
+                { text: "PAVÃO", emoji: "🦚" }, { text: "PAPAGAIO", emoji: "🦜" }, { text: "CORUJA", emoji: "🦉" }, { text: "ÁGUIA", emoji: "🦅" },
+                { text: "JOANINHA", emoji: "🐞" }, { text: "CARACOL", emoji: "🐌" }, { text: "LULA", emoji: "🦑" }, { text: "CAMARÃO", emoji: "🦐" },
+                
+                // --- NATUREZA ---
+                { text: "ÁRVORE", emoji: "🌳" }, { text: "FLOR", emoji: "🌸" }, { text: "ROSA", emoji: "🌹" }, { text: "GIRASSOL", emoji: "🌻" },
+                { text: "CACTO", emoji: "🌵" }, { text: "PALMEIRA", emoji: "🌴" }, { text: "FOLHA", emoji: "🍃" }, { text: "SOL", emoji: "☀️" },
+                { text: "LUA", emoji: "🌙" }, { text: "ESTRELA", emoji: "⭐" }, { text: "NUVEM", emoji: "☁️" }, { text: "CHUVA", emoji: "🌧️" },
+                { text: "NEVE", emoji: "❄️" }, { text: "VENTO", emoji: "💨" }, { text: "RAIO", emoji: "⚡" }, { text: "ARCO-ÍRIS", emoji: "🌈" },
+                { text: "MAR", emoji: "🌊" }, { text: "MONTANHA", emoji: "⛰️" }, { text: "VULCÃO", emoji: "🌋" }, { text: "ILHA", emoji: "🏝️" },
+                { text: "DESERTO", emoji: "🏜️" }, { text: "RIO", emoji: "🏞️" }, { text: "FOGO", emoji: "🔥" }, { text: "ÁGUA", emoji: "💧" },
+                { text: "PEDRA", emoji: "🪨" }, { text: "PLANETA", emoji: "🪐" }, { text: "COMETA", emoji: "☄️" }, { text: "MUNDO", emoji: "🌍" },
+
+                // --- ALIMENTOS ---
+                { text: "MAÇÃ", emoji: "🍎" }, { text: "BANANA", emoji: "🍌" }, { text: "LARANJA", emoji: "🍊" }, { text: "UVA", emoji: "🍇" },
+                { text: "MORANGO", emoji: "🍓" }, { text: "MELANCIA", emoji: "🍉" }, { text: "MELÃO", emoji: "🍈" }, { text: "ABACAXI", emoji: "🍍" },
+                { text: "PERA", emoji: "🍐" }, { text: "PÊSSEGO", emoji: "🍑" }, { text: "CEREJA", emoji: "🍒" }, { text: "LIMÃO", emoji: "🍋" },
+                { text: "COCO", emoji: "🥥" }, { text: "KIWI", emoji: "🥝" }, { text: "TOMATE", emoji: "🍅" }, { text: "ABACATE", emoji: "🥑" },
+                { text: "BATATA", emoji: "🥔" }, { text: "CENOURA", emoji: "🥕" }, { text: "MILHO", emoji: "🌽" }, { text: "PIMENTA", emoji: "🌶️" },
+                { text: "BRÓCOLIS", emoji: "🥦" }, { text: "COGUMELO", emoji: "🍄" }, { text: "PÃO", emoji: "🍞" }, { text: "QUEIJO", emoji: "🧀" },
+                { text: "OVO", emoji: "🥚" }, { text: "CARNE", emoji: "🥩" }, { text: "FRANGO", emoji: "🍗" }, { text: "HAMBÚRGUER", emoji: "🍔" },
+                { text: "BATATA-FRITA", emoji: "🍟" }, { text: "PIZZA", emoji: "🍕" }, { text: "CACHORRO-QUENTE", emoji: "🌭" }, { text: "SANDUÍCHE", emoji: "🥪" },
+                { text: "TACO", emoji: "🌮" }, { text: "BURRITO", emoji: "🌯" }, { text: "OVO-FRITO", emoji: "🍳" }, { text: "PIPOCA", emoji: "🍿" },
+                { text: "ARROZ", emoji: "🍚" }, { text: "MACARRÃO", emoji: "🍝" }, { text: "SUSHI", emoji: "🍣" }, { text: "SORVETE", emoji: "🍦" },
+                { text: "BOLO", emoji: "🍰" }, { text: "CHOCOLATE", emoji: "🍫" }, { text: "BALA", emoji: "🍬" }, { text: "PIRULITO", emoji: "🍭" },
+                { text: "BISCOITO", emoji: "🍪" }, { text: "ROSQUINHA", emoji: "🍩" }, { text: "PUDIM", emoji: "🍮" }, { text: "MEL", emoji: "🍯" },
+                { text: "LEITE", emoji: "🥛" }, { text: "CAFÉ", emoji: "☕" }, { text: "CHÁ", emoji: "🍵" }, { text: "SUCO", emoji: "🧃" },
+
+                // --- LUGARES E CONSTRUÇÕES ---
+                { text: "CASA", emoji: "🏠" }, { text: "ESCOLA", emoji: "🏫" }, { text: "HOSPITAL", emoji: "🏥" }, { text: "BANCO", emoji: "🏦" },
+                { text: "HOTEL", emoji: "🏨" }, { text: "IGREJA", emoji: "⛪" }, { text: "CASTELO", emoji: "🏰" }, { text: "PRÉDIO", emoji: "🏢" },
+                { text: "FÁBRICA", emoji: "🏭" }, { text: "ESTÁDIO", emoji: "🏟️" }, { text: "PARQUE", emoji: "⛲" }, { text: "PRAIA", emoji: "🏖️" },
+                { text: "ZOOLÓGICO", emoji: "🦁" }, { text: "CIRCO", emoji: "🎪" }, { text: "LOJA", emoji: "🏪" }, { text: "MERCADO", emoji: "🛒" },
+                { text: "PONTE", emoji: "🌉" }, { text: "RUA", emoji: "🛣️" }, { text: "ESTRADA", emoji: "🛤️" }, { text: "AEROPORTO", emoji: "🛫" },
+
+                // --- OBJETOS E BRINQUEDOS ---
+                { text: "BOLA", emoji: "⚽" }, { text: "BONECA", emoji: "🎎" }, { text: "PIPA", emoji: "🪁" }, { text: "IÔ-IÔ", emoji: "🪀" },
+                { text: "ROBÔ", emoji: "🤖" }, { text: "URSO DE PELÚCIA", emoji: "🧸" }, { text: "DADO", emoji: "🎲" }, { text: "VIDEOGAME", emoji: "🎮" },
+                { text: "LIVRO", emoji: "📖" }, { text: "LÁPIS", emoji: "✏️" }, { text: "CANETA", emoji: "🖊️" }, { text: "TESOURA", emoji: "✂️" },
+                { text: "MOCHILA", emoji: "🎒" }, { text: "COMPUTADOR", emoji: "💻" }, { text: "TELEFONE", emoji: "📱" }, { text: "CÂMERA", emoji: "📷" },
+                { text: "RELÓGIO", emoji: "⏰" }, { text: "LÂMPADA", emoji: "💡" }, { text: "VELA", emoji: "🕯️" }, { text: "CHAVE", emoji: "🔑" },
+                { text: "CADEADO", emoji: "🔒" }, { text: "MARTELO", emoji: "🔨" }, { text: "SERROTE", emoji: "🪚" }, { text: "PARA-FUSO", emoji: "🔩" },
+                { text: "ESCADA", emoji: "🪜" }, { text: "ESPELHO", emoji: "🪞" }, { text: "CAMA", emoji: "🛏️" }, { text: "SOFÁ", emoji: "🛋️" },
+                { text: "CADEIRA", emoji: "🪑" }, { text: "BANHEIRA", emoji: "🛁" }, { text: "SABONETE", emoji: "🧼" }, { text: "ESCOVA", emoji: "🪥" },
+                { text: "VASSOURA", emoji: "🧹" }, { text: "BALDE", emoji: "🪣" }, { text: "ESPONJA", emoji: "🧽" }, { text: "DINHEIRO", emoji: "💵" },
+                { text: "PRESENTE", emoji: "🎁" }, { text: "BALÃO", emoji: "🎈" }, { text: "CARTA", emoji: "✉️" }, { text: "JORNAL", emoji: "📰" },
+                { text: "LIXO", emoji: "🗑️" },
+
+                // --- TRANSPORTE ---
+                { text: "CARRO", emoji: "🚗" }, { text: "TÁXI", emoji: "🚕" }, { text: "ÔNIBUS", emoji: "🚌" }, { text: "CAMINHÃO", emoji: "🚛" },
+                { text: "TRATOR", emoji: "🚜" }, { text: "BICICLETA", emoji: "🚲" }, { text: "MOTO", emoji: "🏍️" }, { text: "TREM", emoji: "🚂" },
+                { text: "AVIÃO", emoji: "✈️" }, { text: "HELICÓPTERO", emoji: "🚁" }, { text: "FOGUETE", emoji: "🚀" }, { text: "NAVIO", emoji: "🚢" },
+                { text: "BARCO", emoji: "⛵" }, { text: "CANOA", emoji: "🛶" }, { text: "SUBMARINO", emoji: "🛳️" }, { text: "AMBULÂNCIA", emoji: "🚑" },
+                { text: "BOMBEIRO", emoji: "🚒" }, { text: "POLÍCIA", emoji: "🚓" },
+
+                // --- ROUPAS E ACESSÓRIOS ---
+                { text: "CAMISA", emoji: "👕" }, { text: "CALÇA", emoji: "👖" }, { text: "VESTIDO", emoji: "👗" }, { text: "SAIA", emoji: "👙" },
+                { text: "CASACO", emoji: "🧥" }, { text: "MEIA", emoji: "🧦" }, { text: "SAPATO", emoji: "👞" }, { text: "TÊNIS", emoji: "👟" },
+                { text: "BOTA", emoji: "👢" }, { text: "CHAPÉU", emoji: "🎩" }, { text: "BONÉ", emoji: "🧢" }, { text: "ÓCULOS", emoji: "👓" },
+                { text: "GRAVATA", emoji: "👔" }, { text: "LUVA", emoji: "🧤" }, { text: "CACHECOL", emoji: "🧣" }, { text: "ANEL", emoji: "💍" },
+                { text: "COROA", emoji: "👑" }, { text: "BOLSA", emoji: "👜" }, { text: "GUARDA-CHUVA", emoji: "☂️" }, { text: "BATOM", emoji: "💄" },
+
+                // --- CORPO HUMANO ---
+                { text: "OLHO", emoji: "👁️" }, { text: "ORELHA", emoji: "👂" }, { text: "NARIZ", emoji: "👃" }, { text: "BOCA", emoji: "👄" },
+                { text: "DENTE", emoji: "🦷" }, { text: "LÍNGUA", emoji: "👅" }, { text: "MÃO", emoji: "✋" }, { text: "PÉ", emoji: "🦶" },
+                { text: "PERNA", emoji: "🦵" }, { text: "BRAÇO", emoji: "💪" }, { text: "DEDO", emoji: "👆" }, { text: "UNHA", emoji: "💅" },
+                { text: "CORAÇÃO", emoji: "❤️" }, { text: "CÉREBRO", emoji: "🧠" }, { text: "OSSO", emoji: "🦴" }, { text: "SANGUE", emoji: "🩸" },
+
+                // --- PESSOAS E PROFISSÕES ---
+                { text: "BEBÊ", emoji: "👶" }, { text: "MENINO", emoji: "👦" }, { text: "MENINA", emoji: "👧" }, { text: "HOMEM", emoji: "👨" },
+                { text: "MULHER", emoji: "👩" }, { text: "IDOSO", emoji: "👴" }, { text: "IDOSA", emoji: "👵" }, { text: "FAMÍLIA", emoji: "👨‍👩‍👧‍👦" },
+                { text: "AMIGO", emoji: "👫" }, { text: "NOIVA", emoji: "👰" }, { text: "NOIVO", emoji: "🤵" }, { text: "REI", emoji: "🤴" },
+                { text: "PRINCESA", emoji: "👸" }, { text: "ANJO", emoji: "👼" }, { text: "PAPAI NOEL", emoji: "🎅" }, { text: "FANTASMA", emoji: "👻" },
+                { text: "ET", emoji: "👽" }, { text: "ROBÔ", emoji: "🤖" }, { text: "POLICIAL", emoji: "👮" }, { text: "BOMBEIRO", emoji: "👨‍🚒" },
+                { text: "MÉDICO", emoji: "👨‍⚕️" }, { text: "DENTISTA", emoji: "🦷" }, { text: "VETERINÁRIO", emoji: "🐾" }, { text: "JUIZ", emoji: "👨‍⚖️" },
+                { text: "COZINHEIRO", emoji: "👨‍🍳" }, { text: "MECÂNICO", emoji: "👨‍🔧" }, { text: "CIENTISTA", emoji: "👨‍🔬" }, { text: "PINTOR", emoji: "👨‍🎨" },
+                { text: "PILOTO", emoji: "👨‍✈️" }, { text: "ASTRONAUTA", emoji: "👨‍🚀" }, { text: "CANTOR", emoji: "👨‍🎤" }, { text: "ALUNO", emoji: "🎒" },
+                { text: "PROFESSOR", emoji: "🏫" }, { text: "FAZENDEIRO", emoji: "👨‍🌾" }, { text: "DETETIVE", emoji: "🕵️" }, { text: "NINJA", emoji: "🥷" }
+            ]
+        };
+
+        // --- Estado Global ---
+        let currentMode = 'letras';
+        let currentIndex = 0;
+        let score = 0;
+        let highScore = 0;
+        let isProcessing = false;
+        let isRandom = false; 
+        let useAccents = false; // Novo: controle de acentos
+        let activeList = []; // Nova lista dinâmica
+        // emojiTimeout removido pois não é mais necessário
+
+        // --- Inicialização de Voz ---
+        const synth = window.speechSynthesis;
+
+        // --- Funções Principais ---
+
+        function init() {
+            loadRecord();
+            setMode('letras');
+        }
+
+        function loadRecord() {
+            const savedRecord = localStorage.getItem('falaAprende_highScore');
+            if (savedRecord) {
+                highScore = parseInt(savedRecord, 10);
+            }
+            updateRecordDisplay();
+        }
+
+        function saveRecord() {
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('falaAprende_highScore', highScore.toString());
+                updateRecordDisplay();
+            }
+        }
+
+        function updateRecordDisplay() {
+            document.getElementById('record-display').innerText = highScore;
+        }
+
+        function loadUserJson(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const json = JSON.parse(e.target.result);
+                    
+                    // Validação simples
+                    if (Array.isArray(json) && json.length > 0 && json[0].text) {
+                        // Substitui a lista de palavras
+                        data.palavras = json;
+                        
+                        // Feedback visual
+                        alert(`Sucesso! Carregadas ${json.length} novas palavras.`);
+                        
+                        // Se estiver no modo palavras, recarrega
+                        if (currentMode === 'palavras') {
+                            setMode('palavras');
+                        }
+                    } else {
+                        alert("O formato do arquivo JSON parece incorreto. Certifique-se de usar: [{'text': 'A', 'emoji': '😀'}, ...]");
+                    }
+                } catch (error) {
+                    alert("Erro ao ler o arquivo JSON. Verifique a sintaxe.");
+                    console.error(error);
+                }
+            };
+            reader.readAsText(file);
+            // Limpa o input para permitir carregar o mesmo arquivo novamente se alterado
+            input.value = '';
+        }
+
+        function toggleRandom() {
+            isRandom = !isRandom;
+            const btn = document.getElementById('btn-random');
+            
+            if (isRandom) {
+                btn.classList.remove('bg-gray-200', 'text-gray-600');
+                btn.classList.add('bg-orange-400', 'text-white', 'border-orange-500');
+            } else {
+                btn.classList.remove('bg-orange-400', 'text-white', 'border-orange-500');
+                btn.classList.add('bg-gray-200', 'text-gray-600');
+            }
+            // Recalcula próximo item
+            nextLevel(true); 
+        }
+
+        function toggleAccents() {
+            useAccents = !useAccents;
+            const btn = document.getElementById('btn-accents');
+            
+            if (useAccents) {
+                btn.classList.remove('bg-gray-200', 'text-gray-600');
+                btn.classList.add('bg-purple-500', 'text-white', 'border-purple-600');
+            } else {
+                btn.classList.remove('bg-purple-500', 'text-white', 'border-purple-600');
+                btn.classList.add('bg-gray-200', 'text-gray-600');
+            }
+            
+            // Recarrega a lista baseada na nova configuração
+            updateActiveList();
+            currentIndex = 0;
+            loadCard();
+        }
+
+        function updateActiveList() {
+            // Filtra a lista baseada no modo e na configuração de acentos
+            if (currentMode === 'silabas') {
+                if (useAccents) {
+                    activeList = data.silabas; // Todas
+                } else {
+                    activeList = data.silabas.filter(item => !item.isAccent); // Apenas sem flag de acento
+                }
+            } else {
+                activeList = data[currentMode];
+            }
+        }
+
+        function setMode(mode) {
+            currentMode = mode;
+            score = 0;
+            renderStars();
+            
+            // Atualiza botões de modo
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-500', 'text-white');
+                btn.classList.add('bg-gray-200', 'text-gray-600');
+            });
+            const activeBtn = document.getElementById(`btn-${mode}`);
+            activeBtn.classList.remove('bg-gray-200', 'text-gray-600');
+            activeBtn.classList.add('bg-blue-500', 'text-white');
+
+            updateActiveList();
+
+            if (isRandom) {
+                currentIndex = Math.floor(Math.random() * activeList.length);
+            } else {
+                currentIndex = 0;
+            }
+
+            loadCard();
+        }
+
+        function loadCard() {
+            if (activeList.length === 0) return;
+
+            const item = activeList[currentIndex];
+            const displayText = document.getElementById('display-text');
+            const displayEmoji = document.getElementById('display-emoji');
+            const revealBtn = document.getElementById('btn-reveal-emoji');
+            const card = document.getElementById('game-card');
+
+            // Animação de entrada
+            card.classList.remove('card-pop');
+            card.classList.remove('card-shake');
+            void card.offsetWidth; 
+            card.classList.add('card-pop');
+
+            displayText.innerText = item.text;
+            
+            // Reset do estado do Emoji
+            displayEmoji.classList.add('hidden');
+            displayEmoji.classList.remove('animate-bounce');
+            
+            // Garante que o botão comece escondido (reset)
+            if (revealBtn) {
+                revealBtn.classList.add('hidden'); 
+            }
+
+            if (item.emoji) {
+                // Configura o emoji, mas mantém oculto
+                displayEmoji.innerText = item.emoji;
+                
+                // Mostra o botão "Ver Dica"
+                if (revealBtn) {
+                    revealBtn.classList.remove('hidden');
+                    revealBtn.style.display = 'flex'; // Garante display flex para centralizar
+                }
+            }
+
+            document.getElementById('feedback-msg').style.opacity = "0";
+        }
+
+        function showEmoji() {
+            const displayEmoji = document.getElementById('display-emoji');
+            const revealBtn = document.getElementById('btn-reveal-emoji');
+            
+            // Revela emoji e anima
+            displayEmoji.classList.remove('hidden');
+            displayEmoji.classList.add('animate-bounce');
+            
+            // Esconde o botão
+            if (revealBtn) {
+                revealBtn.classList.add('hidden');
+                revealBtn.style.display = 'none';
+            }
+        }
+
+        function speakCurrentItem() {
+            if (synth.speaking) synth.cancel();
+            
+            const item = activeList[currentIndex];
+            let textToSpeak = item.text.toLowerCase();
+
+            // Ajustes de pronúncia
+            if (currentMode === 'letras') {
+                const map = {'m':'ê-me', 'l':'é-le', 's':'és-se', 'r':'ér-re', 'h':'agá', 'w':'dáblio', 'y':'ípsilon', 'k':'cá', 'x':'xis'};
+                if(map[textToSpeak]) textToSpeak = map[textToSpeak];
+            }
+            
+            // Ajustes para sílabas específicas que o sintetizador pode errar isoladamente
+            if (textToSpeak === 'que') textToSpeak = 'quê';
+            if (textToSpeak === 'se') textToSpeak = 'sê';
+
+            const utterThis = new SpeechSynthesisUtterance(textToSpeak);
+            utterThis.lang = 'pt-BR';
+            utterThis.rate = 0.9; 
+            synth.speak(utterThis);
+        }
+
+        function handleSuccess() {
+            if (isProcessing) return;
+            isProcessing = true;
+
+            const feedback = document.getElementById('feedback-msg');
+            
+            feedback.innerText = "Muito bem! 🎉";
+            feedback.classList.remove('text-red-500');
+            feedback.classList.add('text-blue-500');
+            feedback.style.opacity = "1";
+            feedback.style.transform = "translateY(0)";
+            
+            createConfetti();
+            playSound('success');
+
+            score++;
+            saveRecord(); // Checa se bateu recorde
+            renderStars();
+
+            // Verifica recompensa de 5 em 5
+            if (score > 0 && score % 5 === 0) {
+                 showReward();
+                 // Delay maior se tiver recompensa
+                 setTimeout(() => {
+                    nextLevel();
+                    isProcessing = false; 
+                }, 3000); // 3 segundos para curtir a recompensa
+            } else {
+                setTimeout(() => {
+                    nextLevel();
+                    isProcessing = false; 
+                }, 1500);
+            }
+        }
+
+        function handleManualError() {
+            if (isProcessing) return;
+            // Se já for zero, não faz nada visualmente diferente além de tremer
+            if (score > 0) {
+                score = Math.max(0, score - 2);
+                renderStars();
+            }
+
+            const feedback = document.getElementById('feedback-msg');
+            feedback.innerText = "Ops! Tente de novo.";
+            feedback.classList.remove('text-blue-500');
+            feedback.classList.add('text-red-500');
+            feedback.style.opacity = "1";
+            feedback.style.transform = "translateY(0)";
+
+            const card = document.getElementById('game-card');
+            card.classList.remove('card-pop');
+            card.classList.remove('card-shake');
+            void card.offsetWidth; 
+            card.classList.add('card-shake');
+
+            playSound('error');
+        }
+
+        function showReward() {
+            const overlay = document.getElementById('reward-overlay');
+            overlay.classList.remove('hidden');
+            // Confete extra
+            createConfetti();
+            createConfetti();
+        }
+
+        function closeReward() {
+            document.getElementById('reward-overlay').classList.add('hidden');
+        }
+
+        function nextLevel(forceRandom = false) {
+            // Se a lista estiver vazia ou com 1 item, não faz nada
+            if (activeList.length <= 1) return;
+
+            if (isRandom || forceRandom) {
+                let newIndex;
+                do {
+                    newIndex = Math.floor(Math.random() * activeList.length);
+                } while (newIndex === currentIndex);
+                currentIndex = newIndex;
+            } else {
+                if (currentIndex < activeList.length - 1) {
+                    currentIndex++;
+                } else {
+                    currentIndex = 0; 
+                    // Nota: Não zeramos o score no loop sequencial para permitir acumular recordes
+                }
+            }
+            loadCard();
+        }
+
+        function renderStars() {
+            const container = document.getElementById('stars-container');
+            const numberDisplay = document.getElementById('score-number');
+            
+            numberDisplay.innerText = score;
+            container.innerHTML = '';
+            
+            // Mostra até 5 estrelas visuais para não poluir, mas o número é real
+            const starsVisual = Math.min(score, 5); 
+            
+            for(let i=0; i<starsVisual; i++) {
+                const star = document.createElement('span');
+                star.innerText = '⭐';
+                star.className = 'text-2xl animate-bounce';
+                star.style.animationDelay = `${i * 100}ms`;
+                container.appendChild(star);
+            }
+            
+            // Se tiver mais que 5, adiciona um +
+            if (score > 5) {
+                const plus = document.createElement('span');
+                plus.innerText = '+';
+                plus.className = 'text-xl font-bold text-yellow-500 ml-1';
+                container.appendChild(plus);
+            }
+        }
+
+        function createConfetti() {
+            const colors = ['#EF476F', '#FFD166', '#06D6A0', '#118AB2'];
+            for (let i = 0; i < 30; i++) {
+                const conf = document.createElement('div');
+                conf.classList.add('confetti');
+                conf.style.left = Math.random() * 100 + 'vw';
+                conf.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                conf.style.animationDuration = (Math.random() * 2 + 2) + 's';
+                document.body.appendChild(conf);
+                setTimeout(() => conf.remove(), 4000);
+            }
+        }
+
+        function playSound(type) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            
+            const ctx = new AudioContext();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            if (type === 'success') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(440, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.5);
+            } else {
+                // Som de erro (grave e curto)
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(100, ctx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.3);
+            }
+        }
+
+        init();
+
+    </script>
+</body>
+</html>
