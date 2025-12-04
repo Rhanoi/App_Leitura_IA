@@ -76,9 +76,7 @@ diretamente no seu navegador.
 
 ### Opção 1: Acesso Online (GitHub Pages)
 
-*(Se você ativar o GitHub Pages no seu repositório, coloque o link aqui.
-Exemplo:
-https://www.google.com/search?q=https://seu-usuario.github.io/fala-e-aprende)*
+[https://rhanoi.github.io/App_Leitura_IA/](https://rhanoi.github.io/App_Leitura_IA/)
 
 ### Opção 2: Rodar Localmente
 
